@@ -1,7 +1,5 @@
 from fastapi import Depends, HTTPException, Header
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.core.config import get_settings
 
 import httpx

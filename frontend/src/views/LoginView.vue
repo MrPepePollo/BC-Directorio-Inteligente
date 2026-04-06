@@ -125,8 +125,8 @@ async function onSubmit() {
         ? route.query.redirect
         : '/'
     router.push(redirect)
-  } catch (e: any) {
-    error.value = e.message || 'Error de autenticacion'
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Error de autenticacion'
   } finally {
     submitting.value = false
   }

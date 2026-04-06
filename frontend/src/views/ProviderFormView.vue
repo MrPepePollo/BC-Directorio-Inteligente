@@ -27,7 +27,7 @@ const form = ref<ProviderDraftForm>({
   category_ids: [] as string[],
   tag_names: [] as string[],
 })
-const enrichResult = ref<any>(null)
+const enrichResult = ref<Record<string, unknown> | null>(null)
 
 // Load existing data in edit mode
 if (isEdit.value) {

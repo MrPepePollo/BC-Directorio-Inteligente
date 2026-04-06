@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db, async_session
-from app.core.deps import require_auth, get_current_user_id
+from app.core.deps import require_auth
 from app.models.provider import Provider, Category, ProviderCategory, Tag, ProviderTag
 from app.schemas.provider import (
     ProviderCreate,
