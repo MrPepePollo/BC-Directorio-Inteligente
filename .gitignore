@@ -32,6 +32,9 @@ test_providers_import.csv
 .claude/
 .codex
 
+# Deploy
+backend/Procfile
+
 # Internal docs
 brief/
 plans/
