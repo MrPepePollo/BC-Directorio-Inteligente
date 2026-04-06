@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-vue-next'
 import { useProviders, useProvider, useCategories } from '@/composables/useProviders'
 import AppButton from '@/components/ui/AppButton.vue'
 import ProviderFormFields from '@/components/providers/ProviderFormFields.vue'
-import type { ProviderDraftForm } from '@/types/provider'
+import type { ProviderDraftForm, EnrichResult } from '@/types/provider'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,7 +27,7 @@ const form = ref<ProviderDraftForm>({
   category_ids: [] as string[],
   tag_names: [] as string[],
 })
-const enrichResult = ref<Record<string, unknown> | null>(null)
+const enrichResult = ref<EnrichResult | null>(null)
 
 // Load existing data in edit mode
 if (isEdit.value) {
