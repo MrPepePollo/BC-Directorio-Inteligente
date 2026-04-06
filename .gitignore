@@ -28,6 +28,9 @@ test_import_auth.csv
 test_providers_70.csv
 test_providers_import.csv
 
+# Backend scripts
+backend/seed_embeddings.py
+
 # Claude
 .claude/
 .codex
