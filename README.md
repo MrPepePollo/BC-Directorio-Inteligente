@@ -348,7 +348,7 @@ pnpm dev
 
 ## Uso de IA en el desarrollo
 
-Este proyecto fue desarrollado utilizando **Claude Code** (Anthropic) como herramienta de aceleracion de desarrollo, asistiendo en:
+Este proyecto fue desarrollado utilizando **Claude Code** (Anthropic) y **Codex** (OpenAI) como herramientas de aceleracion de desarrollo, asistiendo en:
 
 - Planificacion de arquitectura y modelo de datos
 - Implementacion de endpoints y logica de negocio

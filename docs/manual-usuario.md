@@ -6,7 +6,7 @@
 - [Acceso a la aplicacion](#acceso-a-la-aplicacion)
 - [Funcionalidades principales](#funcionalidades-principales)
 - [Flujos principales](#flujos-principales)
-- [Preguntas frecuentes](#preguntas-frecuentes)
+
 
 ---
 
@@ -173,24 +173,3 @@ Solo el creador puede eliminar un proveedor:
 6. Ajusta cualquier dato si es necesario
 7. Haz clic en **"Guardar en directorio"**
 
----
-
-## Preguntas frecuentes
-
-**P: Necesito pagar algo para usar la aplicacion?**
-R: No. La aplicacion es gratuita para el usuario final.
-
-**P: Que pasa si la IA categoriza mal a un proveedor?**
-R: Las categorias asignadas por IA se distinguen con un badge "ai". Puedes editar el proveedor y cambiar las categorias manualmente.
-
-**P: Puedo eliminar un proveedor que creo otra persona?**
-R: No. Solo el creador original puede editar o eliminar un proveedor.
-
-**P: La busqueda inteligente funciona sin iniciar sesion?**
-R: No. La busqueda inteligente requiere autenticacion. Sin embargo, puedes navegar el listado de proveedores y ver sus detalles sin cuenta.
-
-**P: Cuantos proveedores puedo crear?**
-R: No hay limite en la cantidad de proveedores que puedes crear.
-
-**P: En que idioma debo escribir la descripcion del proveedor?**
-R: La IA funciona bien tanto en espanol como en ingles. Escribe en el idioma que prefieras.
