@@ -1,0 +1,232 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary-50: oklch(0.97 0.02 245);
+  --color-primary-100: oklch(0.94 0.04 246);
+  --color-primary-200: oklch(0.89 0.08 248);
+  --color-primary-300: oklch(0.81 0.13 251);
+  --color-primary-400: oklch(0.71 0.17 254);
+  --color-primary-500: oklch(0.62 0.19 257);
+  --color-primary-600: oklch(0.54 0.18 258);
+  --color-primary-700: oklch(0.46 0.16 258);
+  --color-primary-800: oklch(0.39 0.13 257);
+  --color-primary-900: oklch(0.31 0.09 255);
+  --color-ai-50: oklch(0.97 0.02 210);
+  --color-ai-100: oklch(0.93 0.04 212);
+  --color-ai-300: oklch(0.8 0.1 220);
+  --color-ai-700: oklch(0.45 0.11 220);
+  --color-ai-900: oklch(0.28 0.07 222);
+
+  --color-canvas: oklch(0.975 0.008 240);
+  --color-surface: oklch(0.99 0.004 240);
+  --color-surface-secondary: oklch(0.968 0.008 240);
+  --color-surface-elevated: oklch(0.998 0.002 240);
+  --color-surface-hover: oklch(0.955 0.015 245);
+  --color-border: oklch(0.89 0.014 250);
+  --color-border-strong: oklch(0.77 0.022 252);
+  --color-text-primary: oklch(0.24 0.028 257);
+  --color-text-secondary: oklch(0.42 0.018 255);
+  --color-text-muted: oklch(0.57 0.015 250);
+
+  --color-success: oklch(0.63 0.17 152);
+  --color-warning: oklch(0.75 0.15 78);
+  --color-danger: oklch(0.59 0.2 24);
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+}
+
+:root {
+  color-scheme: light;
+  --shadow-soft: 0 12px 30px -20px rgb(28 55 106 / 0.18);
+  --shadow-card: 0 24px 64px -38px rgb(18 45 96 / 0.18);
+  --shadow-card-hover: 0 30px 80px -36px rgb(18 45 96 / 0.28);
+  --shadow-primary: 0 24px 60px -28px rgb(46 108 234 / 0.42);
+}
+
+.dark {
+  color-scheme: dark;
+  --color-canvas: oklch(0.125 0.018 255);
+  --color-surface: oklch(0.155 0.017 255);
+  --color-surface-secondary: oklch(0.185 0.018 255);
+  --color-surface-elevated: oklch(0.205 0.02 255);
+  --color-surface-hover: oklch(0.245 0.023 255);
+  --color-border: oklch(0.3 0.018 255);
+  --color-border-strong: oklch(0.44 0.03 255);
+  --color-text-primary: oklch(0.95 0.006 245);
+  --color-text-secondary: oklch(0.76 0.014 250);
+  --color-text-muted: oklch(0.61 0.015 252);
+  --shadow-soft: 0 18px 40px -26px rgb(5 10 24 / 0.58);
+  --shadow-card: 0 30px 72px -40px rgb(2 8 24 / 0.7);
+  --shadow-card-hover: 0 38px 90px -42px rgb(4 9 27 / 0.85);
+  --shadow-primary: 0 22px 56px -28px rgb(56 124 255 / 0.36);
+}
+
+html {
+  background: var(--color-canvas);
+}
+
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
+body {
+  min-height: 100vh;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  color: var(--color-text-primary);
+  background:
+    radial-gradient(circle at top, rgb(74 140 255 / 0.12), transparent 32%),
+    radial-gradient(circle at 100% 0, rgb(61 196 226 / 0.08), transparent 24%),
+    linear-gradient(180deg, var(--color-canvas) 0%, var(--color-surface) 42%, var(--color-surface-secondary) 100%);
+  transition:
+    background-color 0.24s ease,
+    color 0.24s ease;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 18%),
+    radial-gradient(circle at 20% 0, rgb(255 255 255 / 0.07), transparent 26%);
+  opacity: 0.9;
+}
+
+#app {
+  position: relative;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.03em;
+}
+
+::selection {
+  background: rgb(58 121 255 / 0.18);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*:focus-visible {
+  outline: 2px solid rgb(58 121 255 / 0.75);
+  outline-offset: 2px;
+}
+
+.app-panel {
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  background: color-mix(in srgb, var(--color-surface-elevated) 92%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.field-shell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-elevated) 94%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    var(--shadow-soft);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.dark .field-shell {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    var(--shadow-soft);
+}
+
+.field-shell:hover {
+  border-color: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-surface-hover) 88%, var(--color-surface-elevated));
+}
+
+.field-shell:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary-400) 74%, var(--color-border));
+  box-shadow:
+    0 0 0 4px rgb(58 121 255 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    var(--shadow-soft);
+}
+
+.field-shell > input:focus-visible,
+.field-shell > textarea:focus-visible {
+  outline: none;
+}
+
+.field-shell--compact {
+  min-height: 2.75rem;
+  border-radius: 0.95rem;
+}
+
+.floating-menu {
+  border: 1px solid color-mix(in srgb, var(--color-border-strong) 45%, var(--color-border));
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+.dark .floating-menu {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 22%),
+    color-mix(in srgb, var(--color-surface-elevated) 92%, rgb(5 10 24 / 0.68));
+  backdrop-filter: blur(20px);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-secondary) 25%,
+    color-mix(in srgb, var(--color-surface-hover) 88%, white) 50%,
+    var(--color-surface-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}

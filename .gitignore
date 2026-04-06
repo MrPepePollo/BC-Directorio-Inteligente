@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data imports
+test_import_auth.csv
+test_providers_70.csv
+test_providers_import.csv
+
+# Claude
+.claude/
+.codex
+
+# Internal docs
+brief/
+plans/
