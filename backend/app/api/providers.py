@@ -32,7 +32,7 @@ async def _generate_embedding_background(provider_id: UUID, description: str):
         async with async_session() as db:
             embedding = await generate_embedding(db, provider_id, description)
             await db.execute(
-                text("UPDATE providers SET embedding = :embedding WHERE id = :id"),
+                text("UPDATE providers SET search_embedding = :embedding WHERE id = :id"),
                 {"embedding": str(embedding), "id": str(provider_id)},
             )
             await db.commit()
@@ -51,11 +51,15 @@ def slugify(text: str) -> str:
 async def _get_or_create_tags(db: AsyncSession, tag_names: list[str]) -> list[Tag]:
     """Get existing tags or create new ones."""
     tags = []
+    seen_slugs: set[str] = set()
     for name in tag_names:
         name = name.strip()
         if not name:
             continue
         slug = slugify(name)
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
         result = await db.execute(select(Tag).where(Tag.slug == slug))
         tag = result.scalar_one_or_none()
         if not tag:
@@ -64,6 +68,16 @@ async def _get_or_create_tags(db: AsyncSession, tag_names: list[str]) -> list[Ta
             await db.flush()
         tags.append(tag)
     return tags
+
+
+def _dedupe_keep_order[T](items: list[T]) -> list[T]:
+    seen: set[T] = set()
+    result: list[T] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def _provider_query():
@@ -177,7 +191,7 @@ async def create_provider(
     await db.flush()
 
     # Assign categories
-    for cat_id in data.category_ids:
+    for cat_id in _dedupe_keep_order(data.category_ids):
         cat = await db.get(Category, cat_id)
         if cat:
             db.add(ProviderCategory(
@@ -188,7 +202,7 @@ async def create_provider(
 
     # Create/assign tags
     if data.tag_names:
-        tags = await _get_or_create_tags(db, data.tag_names)
+        tags = await _get_or_create_tags(db, _dedupe_keep_order(data.tag_names))
         for tag in tags:
             db.add(ProviderTag(
                 provider_id=provider.id,
@@ -236,23 +250,34 @@ async def update_provider(
 
     # Update categories if provided
     if data.category_ids is not None:
-        await db.execute(
-            select(ProviderCategory)
-            .where(ProviderCategory.provider_id == provider_id)
-        )
-        # Delete existing manual categories
-        existing = await db.execute(
+        desired_category_ids = set(_dedupe_keep_order(data.category_ids))
+        valid_category_ids: set[UUID] = set()
+        if desired_category_ids:
+            valid_result = await db.execute(
+                select(Category.id).where(Category.id.in_(list(desired_category_ids)))
+            )
+            valid_category_ids = set(valid_result.scalars().all())
+
+        existing_result = await db.execute(
             select(ProviderCategory).where(
-                ProviderCategory.provider_id == provider_id,
-                ProviderCategory.source == "manual",
+                ProviderCategory.provider_id == provider_id
             )
         )
-        for pc in existing.scalars().all():
-            await db.delete(pc)
+        existing_categories = existing_result.scalars().all()
+        existing_by_category_id = {
+            pc.category_id: pc
+            for pc in existing_categories
+        }
 
-        for cat_id in data.category_ids:
-            cat = await db.get(Category, cat_id)
-            if cat:
+        for pc in existing_categories:
+            if pc.category_id not in valid_category_ids:
+                await db.delete(pc)
+            else:
+                pc.source = "manual"
+                pc.confidence = None
+
+        for cat_id in valid_category_ids:
+            if cat_id not in existing_by_category_id:
                 db.add(ProviderCategory(
                     provider_id=provider_id,
                     category_id=cat_id,
@@ -261,22 +286,39 @@ async def update_provider(
 
     # Update tags if provided
     if data.tag_names is not None:
-        existing_tags = await db.execute(
-            select(ProviderTag).where(
-                ProviderTag.provider_id == provider_id,
-                ProviderTag.source == "manual",
-            )
+        desired_tag_names_by_slug = {
+            slugify(name.strip()): name.strip()
+            for name in data.tag_names
+            if name.strip()
+        }
+        tags = await _get_or_create_tags(
+            db,
+            list(desired_tag_names_by_slug.values()),
         )
-        for pt in existing_tags.scalars().all():
-            await db.delete(pt)
+        desired_tag_ids = {tag.id for tag in tags}
 
-        tags = await _get_or_create_tags(db, data.tag_names)
+        existing_tags_result = await db.execute(
+            select(ProviderTag).where(ProviderTag.provider_id == provider_id)
+        )
+        existing_tags = existing_tags_result.scalars().all()
+        existing_by_tag_id = {
+            pt.tag_id: pt
+            for pt in existing_tags
+        }
+
+        for pt in existing_tags:
+            if pt.tag_id not in desired_tag_ids:
+                await db.delete(pt)
+            else:
+                pt.source = "manual"
+
         for tag in tags:
-            db.add(ProviderTag(
-                provider_id=provider_id,
-                tag_id=tag.id,
-                source="manual",
-            ))
+            if tag.id not in existing_by_tag_id:
+                db.add(ProviderTag(
+                    provider_id=provider_id,
+                    tag_id=tag.id,
+                    source="manual",
+                ))
 
     await db.commit()
 

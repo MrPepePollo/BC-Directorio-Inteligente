@@ -31,6 +31,7 @@ from typing import Any
 
 import httpx
 import openai
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +49,14 @@ logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 8
 AGENT_MODEL = settings.openai_model
+BLOCKED_PROFILE_DOMAINS = (
+    "signalhire.com",
+    "rocketreach.co",
+    "apollo.io",
+    "zoominfo.com",
+    "crunchbase.com",
+    "linkedin.com",
+)
 
 
 class StepType(str, Enum):
@@ -56,6 +65,14 @@ class StepType(str, Enum):
     OBSERVATION = "observation"
     FINAL = "final"
     ERROR = "error"
+
+
+class AgentDecision(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    thought: str = Field(min_length=1, max_length=500)
+    action: str = Field(min_length=1, max_length=40)
+    action_input: dict[str, Any] = Field(default_factory=dict)
 
 
 @dataclass
@@ -118,6 +135,63 @@ def _slugify(text_str: str) -> str:
     return re.sub(r"[\s_]+", "-", text_str)
 
 
+def _is_blocked_profile_url(url: str) -> bool:
+    return any(domain in url.lower() for domain in BLOCKED_PROFILE_DOMAINS)
+
+
+def _serialize_embedding(value: Any) -> str | None:
+    if not isinstance(value, list) or not value:
+        return None
+    if not all(isinstance(item, int | float) for item in value):
+        return None
+    return "[" + ",".join(str(float(item)) for item in value) + "]"
+
+
+def _description_quality_score(value: str) -> int:
+    normalized = re.sub(r"\s+", " ", value.strip())
+    score = min(len(normalized), 500)
+    business_terms = (
+        "software",
+        "soluciones",
+        "desarrollo",
+        "tecnologia",
+        "servicios",
+        "plataforma",
+        "consultoria",
+        "aplicaciones",
+        "empresarial",
+        "digital",
+    )
+    score += sum(35 for term in business_terms if term in normalized.casefold())
+    return score
+
+
+def _is_description_update_allowed(current: str, candidate: Any) -> bool:
+    if not isinstance(candidate, str):
+        return False
+
+    cleaned = re.sub(r"\s+", " ", candidate).strip()
+    if len(cleaned) < 80 or len(cleaned) > 700:
+        return False
+
+    rejected_patterns = (
+        r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",
+        r"https?://",
+        r"\bcookie\b",
+        r"\bjavascript\b",
+        r"\bdocument\.",
+        r"\baddEventListener\b",
+    )
+    if any(re.search(pattern, cleaned, flags=re.IGNORECASE) for pattern in rejected_patterns):
+        return False
+
+    current_cleaned = re.sub(r"\s+", " ", current or "").strip()
+    if cleaned.casefold() == current_cleaned.casefold():
+        return False
+
+    return _description_quality_score(cleaned) >= _description_quality_score(current_cleaned) + 40
+
+
 async def tool_search_web(query: str) -> dict[str, Any]:
     """Search the web for information about a provider."""
     try:
@@ -146,6 +220,7 @@ async def tool_search_web(query: str) -> dict[str, Any]:
 
 async def tool_fetch_website(url: str) -> dict[str, Any]:
     """Fetch and parse a website to extract useful information."""
+    is_third_party_profile = _is_blocked_profile_url(url)
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -171,6 +246,9 @@ async def tool_fetch_website(url: str) -> dict[str, Any]:
         return {
             "success": True,
             "final_url": str(response.url),
+            "is_third_party_profile": (
+                is_third_party_profile or _is_blocked_profile_url(str(response.url))
+            ),
             "title": _clean_html_text(title_match.group(1)) if title_match else "",
             "meta_description": _clean_html_text(meta_match.group(1)) if meta_match else "",
             "headings": [_clean_html_text(h) for h in headings[:8]],
@@ -195,7 +273,21 @@ async def tool_extract_contact(html_content_or_url: str) -> dict[str, Any]:
         content,
         flags=re.IGNORECASE,
     )))
-    phones = list(set(re.findall(r"(?:\+\d[\d\s().-]{7,}\d)", content)))
+    phone_candidates = re.findall(
+        r"(?<![\w.])(?:\+?\d[\d\s().-]{6,}\d)(?![\w.])",
+        content,
+    )
+    phones: list[str] = []
+    seen_phones: set[str] = set()
+    for candidate in phone_candidates:
+        digits = re.sub(r"\D", "", candidate)
+        if len(digits) < 7 or len(digits) > 15:
+            continue
+        if not (candidate.strip().startswith("+") or (len(digits) == 9 and digits.startswith("9")) or len(digits) >= 10):
+            continue
+        if digits not in seen_phones:
+            seen_phones.add(digits)
+            phones.append(candidate.strip())
 
     return {
         "emails": emails[:3],
@@ -231,10 +323,16 @@ async def tool_update_provider(
     fields = ["contact_email", "contact_phone", "website", "city", "country"]
     for field_name in fields:
         if field_name in updates and updates[field_name]:
+            if field_name == "website" and _is_blocked_profile_url(str(updates[field_name])):
+                continue
             current = getattr(provider, field_name)
             if not current:
                 setattr(provider, field_name, updates[field_name])
                 applied[field_name] = updates[field_name]
+
+    if _is_description_update_allowed(provider.description, updates.get("description")):
+        provider.description = re.sub(r"\s+", " ", updates["description"]).strip()
+        applied["description"] = "updated"
 
     if "categories" in updates:
         for cat_data in updates["categories"]:
@@ -290,10 +388,11 @@ async def tool_update_provider(
                 applied.setdefault("tags_added", [])
                 applied["tags_added"].append(tag_name)
 
-    if "embedding" in updates and updates["embedding"]:
+    embedding_text = _serialize_embedding(updates.get("embedding"))
+    if embedding_text:
         await db.execute(
-            text("UPDATE providers SET embedding = :embedding WHERE id = :id"),
-            {"embedding": str(updates["embedding"]), "id": str(provider.id)},
+            text("UPDATE providers SET search_embedding = :embedding WHERE id = :id"),
+            {"embedding": embedding_text, "id": str(provider.id)},
         )
         applied["embedding"] = "generated"
 
@@ -311,7 +410,7 @@ Available tools:
 4. categorize(description: str) - Categorize the provider into predefined categories using AI.
 5. extract_entities(description: str) - Extract services, technologies, and specialties from the description.
 6. generate_embedding(description: str) - Generate a vector embedding for semantic search.
-7. update_provider(updates: object) - Apply discovered data to the provider. Fields: contact_email, contact_phone, website, city, country, categories, tags, embedding.
+7. update_provider(updates: object) - Apply discovered data to the provider. Fields: description, contact_email, contact_phone, website, city, country, categories, tags, embedding.
 8. finish(summary: str) - Complete the enrichment process with a summary of what was done.
 """
 
@@ -350,25 +449,124 @@ O si ya terminaste:
 9. Si una herramienta falla, intenta un enfoque alternativo
 10. Maximo {MAX_ITERATIONS} iteraciones — prioriza lo mas importante primero
 11. Responde SOLO con JSON valido, sin markdown ni texto adicional
+12. No guardes paginas agregadoras como sitio oficial (SignalHire, LinkedIn, Apollo, ZoomInfo, Crunchbase, RocketReach)
+13. No copies descripciones largas en action_input; si una herramienta acepta description, puedes omitirla y se usara la descripcion actual
+14. Puedes mejorar description solo si el sitio oficial aporta informacion mas clara. Escribe 1-3 frases B2B, sin emails, telefonos, URLs, cookies ni texto tecnico del HTML
 """
 
 
 def _parse_agent_response(content: str) -> dict[str, Any]:
-    """Parse the agent's JSON response, tolerating markdown fences."""
+    """Parse the agent's first JSON decision, tolerating fences and trailing text."""
     cleaned = content.strip()
     if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if "\n" in cleaned:
-            cleaned = cleaned.split("\n", 1)[1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+        fence_match = re.match(
+            r"```(?:json)?\s*(.*?)\s*```",
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if fence_match:
+            cleaned = fence_match.group(1).strip()
 
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"No JSON found in response: {cleaned[:200]}")
-    return json.loads(cleaned[start:end + 1])
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", cleaned):
+        try:
+            parsed, _end = decoder.raw_decode(cleaned[match.start():])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            raise ValueError("Agent response JSON must be an object")
+        return parsed
+
+    if cleaned in {"", "{"}:
+        raise ValueError("Incomplete JSON response from agent model")
+
+    raise ValueError(f"No JSON found in response: {cleaned[:200]}")
+
+
+def _extract_response_text(response: Any) -> str:
+    text_parts: list[str] = []
+    for output in response.output:
+        if getattr(output, "type", None) != "message":
+            continue
+        for block in getattr(output, "content", []):
+            if getattr(block, "type", None) == "output_text":
+                text_parts.append(getattr(block, "text", ""))
+    return "".join(text_parts)
+
+
+async def _request_agent_decision(messages: list[dict[str, str]]) -> tuple[dict[str, Any], str]:
+    """Request one structured ReAct decision from the model."""
+    retry_message = {
+        "role": "user",
+        "content": (
+            "La decision anterior llego vacia o incompleta. Devuelve una sola decision "
+            "estructurada corta. No copies textos largos en action_input."
+        ),
+    }
+    last_error: Exception | None = None
+
+    for attempt in range(2):
+        attempt_messages = messages if attempt == 0 else [*messages, retry_message]
+        try:
+            response = await client.responses.parse(
+                model=AGENT_MODEL,
+                instructions=SYSTEM_PROMPT,
+                input=attempt_messages,
+                text_format=AgentDecision,
+                reasoning={"effort": "low"},
+                max_output_tokens=1200,
+                text={"verbosity": "low"},
+            )
+            if response.output_parsed is not None:
+                decision = response.output_parsed.model_dump()
+                return decision, json.dumps(decision, ensure_ascii=False)
+
+            response_text = _extract_response_text(response)
+            if response_text:
+                try:
+                    return _parse_agent_response(response_text), response_text
+                except ValueError as exc:
+                    last_error = exc
+                    logger.warning(
+                        "Structured agent decision text was invalid on attempt %d: %s",
+                        attempt + 1,
+                        exc,
+                    )
+                    continue
+
+            last_error = ValueError("Empty structured agent decision")
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "Structured agent decision failed on attempt %d: %s",
+                attempt + 1,
+                exc,
+            )
+
+    logger.warning("Structured agent decision failed, using raw JSON fallback: %s", last_error)
+
+    for attempt in range(2):
+        attempt_messages = messages if attempt == 0 else [*messages, retry_message]
+        response = await client.responses.create(
+            model=AGENT_MODEL,
+            instructions=SYSTEM_PROMPT,
+            input=attempt_messages,
+            reasoning={"effort": "low"},
+            max_output_tokens=1500,
+            text={"verbosity": "low"},
+        )
+        response_text = _extract_response_text(response)
+        try:
+            return _parse_agent_response(response_text), response_text
+        except ValueError as exc:
+            last_error = exc
+            logger.warning(
+                "Raw agent decision was invalid on attempt %d: %s",
+                attempt + 1,
+                exc,
+            )
+
+    raise last_error or ValueError("Unable to get a valid agent decision")
 
 
 def _build_provider_context(provider: Provider) -> str:
@@ -423,28 +621,14 @@ async def run_enrichment_agent(
     ]
 
     accumulated_updates: dict[str, Any] = {}
+    last_fetch_content = ""
 
     for iteration in range(MAX_ITERATIONS):
         result.total_iterations = iteration + 1
         step_start = time.monotonic()
 
         try:
-            response = await client.responses.create(
-                model=AGENT_MODEL,
-                instructions=SYSTEM_PROMPT,
-                input=messages,
-                max_output_tokens=1000,
-                text={"verbosity": "low"},
-            )
-
-            response_text = ""
-            for output in response.output:
-                if getattr(output, "type", None) == "message":
-                    for block in getattr(output, "content", []):
-                        if getattr(block, "type", None) == "output_text":
-                            response_text += getattr(block, "text", "")
-
-            parsed = _parse_agent_response(response_text)
+            parsed, response_text = await _request_agent_decision(messages)
 
         except Exception as exc:
             step_ms = int((time.monotonic() - step_start) * 1000)
@@ -491,9 +675,20 @@ async def run_enrichment_agent(
 
             elif action == "fetch_website":
                 observation = await tool_fetch_website(action_input.get("url", ""))
+                last_fetch_content = json.dumps(observation, ensure_ascii=False, default=str)
+                final_url = observation.get("final_url")
+                if final_url and not observation.get("is_third_party_profile"):
+                    accumulated_updates.setdefault("website", final_url)
 
             elif action == "extract_contact":
-                observation = await tool_extract_contact(action_input.get("content_or_url", ""))
+                contact_source = action_input.get("content_or_url") or last_fetch_content
+                observation = await tool_extract_contact(contact_source)
+                emails = observation.get("emails", [])
+                phones = observation.get("phones", [])
+                if emails:
+                    accumulated_updates.setdefault("contact_email", emails[0])
+                if phones:
+                    accumulated_updates.setdefault("contact_phone", phones[0])
 
             elif action == "categorize":
                 desc = action_input.get("description", provider.description)
@@ -513,8 +708,9 @@ async def run_enrichment_agent(
 
             elif action == "update_provider":
                 updates = action_input.get("updates", action_input)
-                # Merge with accumulated
-                merged = {**accumulated_updates, **updates}
+                updates.pop("embedding", None)
+                # Merge model-proposed fields with trusted backend discoveries.
+                merged = {**updates, **accumulated_updates}
                 observation = await tool_update_provider(db, provider, merged)
                 result.changes_applied = observation.get("applied", {})
                 accumulated_updates.clear()
@@ -523,6 +719,7 @@ async def run_enrichment_agent(
                 observation = {"error": f"Herramienta desconocida: {action}"}
 
         except Exception as exc:
+            await db.rollback()
             observation = {"error": str(exc)}
             logger.warning("Tool %s failed: %s", action, exc)
 

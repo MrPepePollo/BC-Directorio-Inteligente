@@ -97,7 +97,7 @@ async def enrich_provider(
 
         # Store embedding in provider
         await db.execute(
-            text("UPDATE providers SET embedding = :embedding WHERE id = :id"),
+            text("UPDATE providers SET search_embedding = :embedding WHERE id = :id"),
             {"embedding": str(embedding), "id": str(provider_id)},
         )
 

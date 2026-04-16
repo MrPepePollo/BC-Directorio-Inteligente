@@ -70,7 +70,7 @@ Al hacer clic en una tarjeta de proveedor, se abre la vista de detalle con:
 - Email, telefono y sitio web de contacto
 - Todas las categorias (con badge indicando si fueron asignadas manual o por IA)
 - Tags completos
-- Botones de **Editar**, **Eliminar**, **Enriquecer con IA** y **Agente IA** (solo visibles si estas autenticado)
+- Botones de **Editar**, **Eliminar** y **Agente de enriquecimiento** (las acciones de gestion solo aparecen si estas autenticado)
 
 ### 3. Crear proveedor
 
@@ -85,16 +85,15 @@ Requiere autenticacion. Haz clic en **"Nuevo Proveedor"** y completa:
 Al guardar:
 - El proveedor se crea inmediatamente
 - En background, la IA genera automaticamente un embedding para busqueda semantica
-- Puedes ejecutar **"Enriquecer con IA"** desde el detalle para que la IA sugiera categorias y tags adicionales
-- O usa el **"Agente IA"** para un enriquecimiento autonomo mas completo (ver seccion siguiente)
+- Puedes ejecutar **"Agente de enriquecimiento"** desde el detalle para que busque datos, complete contacto, clasifique y genere embeddings automaticamente
 
 ### 4. Agente de enriquecimiento autonomo
 
-El **Agente IA** es un sistema autonomo que enriquece un proveedor de forma inteligente usando un loop de razonamiento (patron ReAct). A diferencia de "Enriquecer con IA" (que ejecuta pasos fijos), el agente **decide por si mismo** que hacer en cada momento.
+El **Agente de enriquecimiento** es un sistema autonomo que enriquece un proveedor de forma inteligente usando un loop de razonamiento (patron ReAct). El agente **decide por si mismo** que hacer en cada momento.
 
 **Como funciona:**
 1. Ve al detalle de un proveedor
-2. Haz clic en el boton **"Agente IA"**
+2. Haz clic en el boton **"Agente de enriquecimiento"**
 3. El agente analiza que informacion falta del proveedor
 4. Ejecuta herramientas autonomamente:
    - Busca en la web si no hay sitio web
@@ -109,16 +108,6 @@ El **Agente IA** es un sistema autonomo que enriquece un proveedor de forma inte
 - Los pasos de **accion** (naranja) muestran que herramienta uso y con que parametros
 - Al finalizar, ves un resumen de los **cambios aplicados** al proveedor
 - Puedes expandir/colapsar los detalles de cada herramienta
-
-**Diferencia con "Enriquecer con IA":**
-
-| | Enriquecer con IA | Agente IA |
-|---|---|---|
-| Patron | Secuencia fija (categorizar → extraer → embedding) | Loop autonomo ReAct |
-| Busqueda web | No | Si, si falta informacion |
-| Extraccion contacto | No | Si, de sitios web |
-| Razonamiento visible | No | Si, paso a paso |
-| Iteraciones | 1 (lineal) | Hasta 8 (adaptativo) |
 
 ### 5. Busqueda inteligente
 
@@ -194,12 +183,12 @@ Solo el creador puede eliminar un proveedor:
 3. Completa al menos nombre y descripcion (se descriptivo para que la IA categorice bien)
 4. Selecciona categorias y agrega tags relevantes
 5. Guarda el proveedor
-6. Ve al detalle y usa **"Agente IA"** para que el agente busque en la web, complete datos de contacto, categorice y genere embeddings automaticamente
+6. Ve al detalle y usa **"Agente de enriquecimiento"** para que el agente busque en la web, complete datos de contacto, categorice y genere embeddings automaticamente
 
 ### Como enriquecer un proveedor con el agente
 
 1. Inicia sesion y ve al detalle de un proveedor
-2. Haz clic en **"Agente IA"**
+2. Haz clic en **"Agente de enriquecimiento"**
 3. Espera a que el agente termine (10-30 segundos)
 4. Revisa la traza paso a paso: cada razonamiento y cada accion
 5. Verifica los cambios aplicados en el panel inferior
@@ -214,4 +203,3 @@ Solo el creador puede eliminar un proveedor:
 5. Revisa el borrador que genero la IA
 6. Ajusta cualquier dato si es necesario
 7. Haz clic en **"Guardar en directorio"**
-

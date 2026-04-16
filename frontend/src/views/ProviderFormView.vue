@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft, CheckCircle2, CircleAlert, Loader2 } from 'lucide-vue-next'
 import { useProviders, useProvider, useCategories } from '@/composables/useProviders'
 import AppButton from '@/components/ui/AppButton.vue'
 import ProviderFormFields from '@/components/providers/ProviderFormFields.vue'
@@ -28,6 +28,12 @@ const form = ref<ProviderDraftForm>({
   tag_names: [] as string[],
 })
 const enrichResult = ref<EnrichResult | null>(null)
+const isRedirecting = ref(false)
+const feedback = ref<{
+  type: 'success' | 'error' | 'loading'
+  title: string
+  message: string
+} | null>(null)
 
 // Load existing data in edit mode
 if (isEdit.value) {
@@ -55,6 +61,12 @@ if (isEdit.value) {
 }
 
 async function onSubmit() {
+  feedback.value = {
+    type: 'loading',
+    title: isEdit.value ? 'Guardando cambios' : 'Creando proveedor',
+    message: 'Estamos actualizando la informacion del directorio.',
+  }
+
   const data = {
     ...form.value,
     contact_email: form.value.contact_email || undefined,
@@ -64,23 +76,42 @@ async function onSubmit() {
     country: form.value.country || undefined,
   }
 
-  if (isEdit.value) {
-    await updateMutation.mutateAsync({ id: providerId.value, data })
-    router.push(`/providers/${providerId.value}`)
-  } else {
-    const result = await createMutation.mutateAsync(data)
-    // Auto-enrich after creation
-    try {
-      enrichResult.value = await enrichMutation.mutateAsync(result.id)
-    } catch {
-      // Enrich is optional, don't block
+  try {
+    if (isEdit.value) {
+      await updateMutation.mutateAsync({ id: providerId.value, data })
+      feedback.value = {
+        type: 'success',
+        title: 'Cambios guardados',
+        message: 'Te llevamos de vuelta a la ficha del proveedor.',
+      }
+      isRedirecting.value = true
+      window.setTimeout(() => router.push(`/providers/${providerId.value}`), 850)
+    } else {
+      const result = await createMutation.mutateAsync(data)
+      feedback.value = {
+        type: 'success',
+        title: 'Proveedor creado',
+        message: 'Te llevamos a la ficha. La IA puede seguir completando datos en segundo plano.',
+      }
+      isRedirecting.value = true
+      void enrichMutation.mutateAsync(result.id).then((value) => {
+        enrichResult.value = value
+      }).catch(() => {
+        // Enrichment is best-effort and must not block the saved provider flow.
+      })
+      window.setTimeout(() => router.push(`/providers/${result.id}`), 850)
     }
-    router.push(`/providers/${result.id}`)
+  } catch (error) {
+    feedback.value = {
+      type: 'error',
+      title: 'No se pudo guardar',
+      message: error instanceof Error ? error.message : 'Revisa los datos e intenta nuevamente.',
+    }
   }
 }
 
 const isSubmitting = computed(
-  () => createMutation.isPending?.value || updateMutation.isPending?.value,
+  () => createMutation.isPending?.value || updateMutation.isPending?.value || isRedirecting.value,
 )
 </script>
 
@@ -99,14 +130,36 @@ const isSubmitting = computed(
       {{ isEdit ? 'Editar proveedor' : 'Nuevo proveedor' }}
     </h1>
 
+    <div
+      v-if="feedback"
+      role="status"
+      aria-live="polite"
+      :class="[
+        'flex items-start gap-3 rounded-lg border px-4 py-3 text-sm',
+        feedback.type === 'success'
+          ? 'border-green-700/50 bg-green-950/45 text-green-100'
+          : feedback.type === 'error'
+            ? 'border-red-700/50 bg-red-950/45 text-red-100'
+            : 'border-primary-700/50 bg-primary-950/35 text-primary-100',
+      ]"
+    >
+      <CheckCircle2 v-if="feedback.type === 'success'" class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert v-else-if="feedback.type === 'error'" class="mt-0.5 h-4 w-4 shrink-0" />
+      <Loader2 v-else class="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+      <span>
+        <span class="block font-semibold">{{ feedback.title }}</span>
+        <span class="mt-0.5 block text-text-secondary">{{ feedback.message }}</span>
+      </span>
+    </div>
+
     <form @submit.prevent="onSubmit" class="space-y-6">
-      <ProviderFormFields v-model="form" :categories="categories" />
+      <ProviderFormFields v-model="form" :categories="categories" :disabled="isSubmitting" />
 
       <!-- Submit -->
       <div class="flex justify-end gap-3">
-        <AppButton type="button" variant="secondary" @click="router.back()">Cancelar</AppButton>
+        <AppButton type="button" variant="secondary" :disabled="isSubmitting" @click="router.back()">Cancelar</AppButton>
         <AppButton type="submit" :loading="isSubmitting">
-          {{ isEdit ? 'Guardar cambios' : 'Crear proveedor' }}
+          {{ isRedirecting ? 'Redirigiendo...' : isEdit ? 'Guardar cambios' : 'Crear proveedor' }}
         </AppButton>
       </div>
     </form>

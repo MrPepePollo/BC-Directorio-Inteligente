@@ -32,10 +32,9 @@ const id = ref(route.params.id as string)
 
 const { user, loading: authLoading } = useAuth()
 const { data: provider, isLoading, refetch } = useProvider(id)
-const { enrichMutation, deleteMutation, agentEnrichMutation } = useProviders()
+const { deleteMutation, agentEnrichMutation } = useProviders()
 
 const isAuthenticated = computed(() => !!user.value && !authLoading.value)
-const isEnriching = computed(() => !!enrichMutation.isPending?.value)
 const isAgentRunning = computed(() => !!agentEnrichMutation.isPending?.value)
 const agentResult = ref<AgentResult | null>(null)
 const showAgentPanel = ref(false)
@@ -66,11 +65,6 @@ const updatedAtLabel = computed(() =>
     ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(provider.value.updated_at))
     : '',
 )
-
-async function enrich() {
-  if (!isAuthenticated.value) return
-  await enrichMutation.mutateAsync(id.value)
-}
 
 async function runAgent() {
   if (!isAuthenticated.value) return
@@ -206,23 +200,11 @@ async function remove() {
               variant="secondary"
               size="sm"
               :loading="isAgentRunning"
-              :disabled="isAgentRunning || isEnriching"
+              :disabled="isAgentRunning"
               @click="runAgent"
             >
               <Bot class="h-4 w-4" />
-              Agente IA
-            </AppButton>
-
-            <AppButton
-              v-if="isAuthenticated"
-              variant="secondary"
-              size="sm"
-              :loading="isEnriching"
-              :disabled="isAgentRunning || isEnriching"
-              @click="enrich"
-            >
-              <Sparkles class="h-4 w-4" />
-              Enriquecer con IA
+              Agente de enriquecimiento
             </AppButton>
 
             <AppButton
