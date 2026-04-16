@@ -320,7 +320,7 @@ async function remove() {
 
         <!-- Agent Status Badge -->
         <div v-if="agentResult" class="flex flex-wrap items-center gap-2">
-          <AppBadge :variant="agentResult.status === 'completed' ? 'primary' : agentResult.status === 'partial' ? 'default' : 'danger'">
+          <AppBadge :variant="agentResult.status === 'completed' ? 'primary' : agentResult.status === 'partial' ? 'default' : 'warning'">
             {{ agentResult.status === 'completed' ? 'Completado' : agentResult.status === 'partial' ? 'Parcial' : 'Error' }}
           </AppBadge>
           <AppBadge v-if="Object.keys(agentResult.changes_applied).length" variant="ai">
