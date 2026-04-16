@@ -67,12 +67,43 @@ class StepType(str, Enum):
     ERROR = "error"
 
 
+class AgentUpdateCategory(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    confidence: float | None = None
+
+
+class AgentProviderUpdates(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    website: str | None = None
+    city: str | None = None
+    country: str | None = None
+    categories: list[AgentUpdateCategory] | None = None
+    tags: list[str] | None = None
+
+
+class AgentActionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str | None = None
+    url: str | None = None
+    content_or_url: str | None = None
+    description: str | None = None
+    summary: str | None = None
+    updates: AgentProviderUpdates | None = None
+
+
 class AgentDecision(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     thought: str = Field(min_length=1, max_length=500)
     action: str = Field(min_length=1, max_length=40)
-    action_input: dict[str, Any] = Field(default_factory=dict)
+    action_input: AgentActionInput = Field(default_factory=AgentActionInput)
 
 
 @dataclass
@@ -518,7 +549,7 @@ async def _request_agent_decision(messages: list[dict[str, str]]) -> tuple[dict[
                 text={"verbosity": "low"},
             )
             if response.output_parsed is not None:
-                decision = response.output_parsed.model_dump()
+                decision = response.output_parsed.model_dump(exclude_none=True)
                 return decision, json.dumps(decision, ensure_ascii=False)
 
             response_text = _extract_response_text(response)
