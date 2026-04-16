@@ -24,7 +24,7 @@
 
 ### URL de produccion
 
-- **Frontend:** https://frontend-ten-tau-nq31sjk493.vercel.app
+- **Frontend:** https://nexo-dun.vercel.app
 - **API Docs:** https://bc-directorio-backend-production.up.railway.app/api/docs
 
 ### Crear una cuenta
@@ -70,7 +70,7 @@ Al hacer clic en una tarjeta de proveedor, se abre la vista de detalle con:
 - Email, telefono y sitio web de contacto
 - Todas las categorias (con badge indicando si fueron asignadas manual o por IA)
 - Tags completos
-- Botones de **Editar** y **Eliminar** (solo visibles si eres el creador)
+- Botones de **Editar**, **Eliminar**, **Enriquecer con IA** y **Agente IA** (solo visibles si estas autenticado)
 
 ### 3. Crear proveedor
 
@@ -86,8 +86,41 @@ Al guardar:
 - El proveedor se crea inmediatamente
 - En background, la IA genera automaticamente un embedding para busqueda semantica
 - Puedes ejecutar **"Enriquecer con IA"** desde el detalle para que la IA sugiera categorias y tags adicionales
+- O usa el **"Agente IA"** para un enriquecimiento autonomo mas completo (ver seccion siguiente)
 
-### 4. Busqueda inteligente
+### 4. Agente de enriquecimiento autonomo
+
+El **Agente IA** es un sistema autonomo que enriquece un proveedor de forma inteligente usando un loop de razonamiento (patron ReAct). A diferencia de "Enriquecer con IA" (que ejecuta pasos fijos), el agente **decide por si mismo** que hacer en cada momento.
+
+**Como funciona:**
+1. Ve al detalle de un proveedor
+2. Haz clic en el boton **"Agente IA"**
+3. El agente analiza que informacion falta del proveedor
+4. Ejecuta herramientas autonomamente:
+   - Busca en la web si no hay sitio web
+   - Extrae contacto (email, telefono) del sitio web
+   - Categoriza y extrae entidades de la descripcion
+   - Genera embeddings para busqueda semantica
+5. En cada paso puedes ver su **razonamiento** (por que tomo esa decision) y el **resultado** de la herramienta
+
+**Panel de trazabilidad:**
+- Cada paso del agente se muestra en una **linea de tiempo visual**
+- Los pasos de **razonamiento** (azul) muestran lo que el agente piensa
+- Los pasos de **accion** (naranja) muestran que herramienta uso y con que parametros
+- Al finalizar, ves un resumen de los **cambios aplicados** al proveedor
+- Puedes expandir/colapsar los detalles de cada herramienta
+
+**Diferencia con "Enriquecer con IA":**
+
+| | Enriquecer con IA | Agente IA |
+|---|---|---|
+| Patron | Secuencia fija (categorizar → extraer → embedding) | Loop autonomo ReAct |
+| Busqueda web | No | Si, si falta informacion |
+| Extraccion contacto | No | Si, de sitios web |
+| Razonamiento visible | No | Si, paso a paso |
+| Iteraciones | 1 (lineal) | Hasta 8 (adaptativo) |
+
+### 5. Busqueda inteligente
 
 Accede desde el boton **"Buscar"** en la navegacion (requiere autenticacion).
 
@@ -112,7 +145,7 @@ Debajo de los resultados, el analista IA proporciona:
 - **Recomendaciones** justificadas
 - La posibilidad de hacer **preguntas de seguimiento** sobre los resultados
 
-### 5. Importar proveedor desde la web
+### 6. Importar proveedor desde la web
 
 Desde los resultados de busqueda web:
 1. Haz clic en **"Anadir al directorio"** en un resultado
@@ -122,7 +155,7 @@ Desde los resultados de busqueda web:
 5. Haz clic en **"Guardar en directorio"** para crear el proveedor
 6. Si el proveedor ya existe, el sistema te lo indicara y bloqueara la duplicacion
 
-### 6. Editar proveedor
+### 7. Editar proveedor
 
 Solo el creador del proveedor puede editarlo:
 1. Ve al detalle del proveedor
@@ -132,7 +165,7 @@ Solo el creador del proveedor puede editarlo:
 
 Si cambias la descripcion, el embedding se regenera automaticamente.
 
-### 7. Eliminar proveedor
+### 8. Eliminar proveedor
 
 Solo el creador puede eliminar un proveedor:
 1. Ve al detalle del proveedor
@@ -161,7 +194,16 @@ Solo el creador puede eliminar un proveedor:
 3. Completa al menos nombre y descripcion (se descriptivo para que la IA categorice bien)
 4. Selecciona categorias y agrega tags relevantes
 5. Guarda el proveedor
-6. Opcionalmente, ve al detalle y usa **"Enriquecer con IA"** para que la IA sugiera mas categorias y tags
+6. Ve al detalle y usa **"Agente IA"** para que el agente busque en la web, complete datos de contacto, categorice y genere embeddings automaticamente
+
+### Como enriquecer un proveedor con el agente
+
+1. Inicia sesion y ve al detalle de un proveedor
+2. Haz clic en **"Agente IA"**
+3. Espera a que el agente termine (10-30 segundos)
+4. Revisa la traza paso a paso: cada razonamiento y cada accion
+5. Verifica los cambios aplicados en el panel inferior
+6. Los datos del proveedor ya se actualizaron automaticamente
 
 ### Como importar un proveedor desde la web
 

@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
   Category,
   EnrichResult,
+  AgentResult,
 } from '@/types/provider'
 
 export function useProviders(params?: {
@@ -53,12 +54,21 @@ export function useProviders(params?: {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['providers'] }),
   })
 
+  const agentEnrichMutation = useMutation({
+    mutationFn: (id: string) => api.post<AgentResult>(`/agents/enrich/${id}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['providers'] })
+      queryClient.invalidateQueries({ queryKey: ['provider'] })
+    },
+  })
+
   return {
     providersQuery,
     createMutation,
     updateMutation,
     deleteMutation,
     enrichMutation,
+    agentEnrichMutation,
   }
 }
 

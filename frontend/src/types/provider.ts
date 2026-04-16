@@ -164,6 +164,25 @@ export interface WebProviderImportPreviewResponse {
   provenance: string
 }
 
+export interface AgentStep {
+  type: 'thought' | 'action' | 'observation' | 'final' | 'error'
+  content: string
+  tool?: string
+  tool_input?: Record<string, unknown>
+  tool_output?: Record<string, unknown>
+  duration_ms?: number
+}
+
+export interface AgentResult {
+  provider_id: string
+  status: 'completed' | 'partial' | 'error'
+  steps: AgentStep[]
+  changes_applied: Record<string, unknown>
+  summary: string
+  total_iterations: number
+  total_duration_ms: number
+}
+
 export interface EnrichResult {
   provider_id: string
   categorization: {

@@ -3,30 +3,43 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
+  Bot,
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
   Globe,
+  Loader2,
   Mail,
   MapPin,
   Pencil,
   Phone,
   Sparkles,
   Trash2,
+  Wrench,
 } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import { useProvider, useProviders } from '@/composables/useProviders'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
+import type { AgentResult } from '@/types/provider'
 
 const route = useRoute()
 const router = useRouter()
 const id = ref(route.params.id as string)
 
 const { user, loading: authLoading } = useAuth()
-const { data: provider, isLoading } = useProvider(id)
-const { enrichMutation, deleteMutation } = useProviders()
+const { data: provider, isLoading, refetch } = useProvider(id)
+const { enrichMutation, deleteMutation, agentEnrichMutation } = useProviders()
 
 const isAuthenticated = computed(() => !!user.value && !authLoading.value)
 const isEnriching = computed(() => !!enrichMutation.isPending?.value)
+const isAgentRunning = computed(() => !!agentEnrichMutation.isPending?.value)
+const agentResult = ref<AgentResult | null>(null)
+const showAgentPanel = ref(false)
+const agentStepsExpanded = ref(true)
 const providerLocation = computed(() =>
   [provider.value?.city, provider.value?.country].filter(Boolean).join(', '),
 )
@@ -57,6 +70,48 @@ const updatedAtLabel = computed(() =>
 async function enrich() {
   if (!isAuthenticated.value) return
   await enrichMutation.mutateAsync(id.value)
+}
+
+async function runAgent() {
+  if (!isAuthenticated.value) return
+  agentResult.value = null
+  showAgentPanel.value = true
+  agentStepsExpanded.value = true
+  try {
+    const result = await agentEnrichMutation.mutateAsync(id.value)
+    agentResult.value = result
+    refetch()
+  } catch (err) {
+    agentResult.value = {
+      provider_id: id.value,
+      status: 'error',
+      steps: [{ type: 'error', content: err instanceof Error ? err.message : 'Error desconocido' }],
+      changes_applied: {},
+      summary: 'El agente no pudo completar el enriquecimiento.',
+      total_iterations: 0,
+      total_duration_ms: 0,
+    }
+  }
+}
+
+function stepIcon(type: string) {
+  switch (type) {
+    case 'thought': return Brain
+    case 'action': return Wrench
+    case 'final': return CheckCircle2
+    case 'error': return CircleAlert
+    default: return Bot
+  }
+}
+
+function stepColor(type: string) {
+  switch (type) {
+    case 'thought': return 'text-blue-500'
+    case 'action': return 'text-amber-500'
+    case 'final': return 'text-emerald-500'
+    case 'error': return 'text-red-500'
+    default: return 'text-text-muted'
+  }
 }
 
 async function remove() {
@@ -150,7 +205,20 @@ async function remove() {
               v-if="isAuthenticated"
               variant="secondary"
               size="sm"
+              :loading="isAgentRunning"
+              :disabled="isAgentRunning || isEnriching"
+              @click="runAgent"
+            >
+              <Bot class="h-4 w-4" />
+              Agente IA
+            </AppButton>
+
+            <AppButton
+              v-if="isAuthenticated"
+              variant="secondary"
+              size="sm"
               :loading="isEnriching"
+              :disabled="isAgentRunning || isEnriching"
               @click="enrich"
             >
               <Sparkles class="h-4 w-4" />
@@ -208,6 +276,138 @@ async function remove() {
               canales disponibles para iniciar una conversacion comercial o tecnica.
             </p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Agent Panel -->
+    <section v-if="showAgentPanel" class="app-panel relative overflow-hidden rounded-[2rem] p-6 sm:p-8">
+      <div class="space-y-5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="rounded-full bg-ai-50 p-2.5 text-ai-600 dark:bg-ai-900/60 dark:text-ai-300">
+              <Bot class="h-5 w-5" />
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-text-primary">Agente de Enriquecimiento</h2>
+              <p class="text-sm text-text-secondary">
+                <template v-if="isAgentRunning">
+                  <span class="inline-flex items-center gap-1.5">
+                    <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                    Razonando y ejecutando herramientas...
+                  </span>
+                </template>
+                <template v-else-if="agentResult">
+                  {{ agentResult.status === 'completed' ? 'Completado' : agentResult.status === 'partial' ? 'Parcialmente completado' : 'Error' }}
+                  en {{ agentResult.total_iterations }} iteraciones
+                  ({{ (agentResult.total_duration_ms / 1000).toFixed(1) }}s)
+                </template>
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              v-if="agentResult"
+              @click="agentStepsExpanded = !agentStepsExpanded"
+              class="rounded-full p-2 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <ChevronUp v-if="agentStepsExpanded" class="h-4 w-4" />
+              <ChevronDown v-else class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Agent Status Badge -->
+        <div v-if="agentResult" class="flex flex-wrap items-center gap-2">
+          <AppBadge :variant="agentResult.status === 'completed' ? 'primary' : agentResult.status === 'partial' ? 'default' : 'danger'">
+            {{ agentResult.status === 'completed' ? 'Completado' : agentResult.status === 'partial' ? 'Parcial' : 'Error' }}
+          </AppBadge>
+          <AppBadge v-if="Object.keys(agentResult.changes_applied).length" variant="ai">
+            {{ Object.keys(agentResult.changes_applied).length }} cambios aplicados
+          </AppBadge>
+        </div>
+
+        <!-- Agent Summary -->
+        <p v-if="agentResult?.summary" class="rounded-[1.2rem] border border-border bg-surface-secondary/65 px-4 py-3 text-sm leading-6 text-text-secondary">
+          {{ agentResult.summary }}
+        </p>
+
+        <!-- Agent Steps Timeline -->
+        <div v-if="agentResult && agentStepsExpanded" class="space-y-3">
+          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+            Traza del agente ({{ agentResult.steps.length }} pasos)
+          </p>
+
+          <div class="relative space-y-0">
+            <div class="absolute left-[18px] top-3 bottom-3 w-px bg-border" />
+
+            <div
+              v-for="(step, index) in agentResult.steps"
+              :key="index"
+              class="relative flex gap-3 py-2"
+            >
+              <div class="relative z-10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-elevated">
+                <component :is="stepIcon(step.type)" class="h-4 w-4" :class="stepColor(step.type)" />
+              </div>
+
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold uppercase tracking-wider" :class="stepColor(step.type)">
+                    {{ step.type === 'thought' ? 'Razonamiento' : step.type === 'action' ? 'Accion' : step.type === 'final' ? 'Conclusion' : 'Error' }}
+                  </span>
+                  <AppBadge v-if="step.tool" variant="default" class="text-[10px]">
+                    {{ step.tool }}
+                  </AppBadge>
+                  <span v-if="step.duration_ms" class="text-[10px] text-text-muted">
+                    {{ step.duration_ms }}ms
+                  </span>
+                </div>
+
+                <p class="text-sm leading-6 text-text-secondary">
+                  {{ step.content }}
+                </p>
+
+                <details v-if="step.tool_output" class="group">
+                  <summary class="cursor-pointer text-xs text-text-muted transition-colors hover:text-text-secondary">
+                    Ver resultado de la herramienta
+                  </summary>
+                  <pre class="mt-1.5 max-h-40 overflow-auto rounded-xl border border-border bg-surface-secondary/80 p-3 text-xs leading-5 text-text-secondary">{{ JSON.stringify(step.tool_output, null, 2) }}</pre>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Changes Applied -->
+        <div v-if="agentResult && Object.keys(agentResult.changes_applied).length" class="space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+            Cambios aplicados al proveedor
+          </p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <div
+              v-for="(value, key) in agentResult.changes_applied"
+              :key="String(key)"
+              class="rounded-[1.1rem] border border-border bg-surface-secondary/65 px-3 py-2"
+            >
+              <span class="text-xs font-medium text-text-muted">{{ key }}</span>
+              <p class="mt-0.5 text-sm text-text-primary truncate">
+                {{ Array.isArray(value) ? value.join(', ') : value }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div v-if="isAgentRunning && !agentResult" class="flex flex-col items-center gap-3 py-8">
+          <div class="relative">
+            <div class="h-12 w-12 rounded-full border-2 border-ai-200 dark:border-ai-800" />
+            <Loader2 class="absolute inset-0 h-12 w-12 animate-spin text-ai-500" />
+          </div>
+          <p class="text-sm text-text-secondary">
+            El agente esta analizando al proveedor y ejecutando herramientas...
+          </p>
+          <p class="text-xs text-text-muted">Esto puede tomar entre 10 y 30 segundos</p>
         </div>
       </div>
     </section>

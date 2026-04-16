@@ -9,7 +9,7 @@
 
 Plataforma full-stack para gestionar un directorio de proveedores de servicios tecnologicos con **busqueda semantica por IA**, categorizacion automatica e importacion inteligente desde la web.
 
-**[Demo en vivo](https://frontend-ten-tau-nq31sjk493.vercel.app)** | **[API Docs (Swagger)](https://bc-directorio-backend-production.up.railway.app/api/docs)**
+**[Demo en vivo](https://nexo-dun.vercel.app)** | **[API Docs (Swagger)](https://bc-directorio-backend-production.up.railway.app/api/docs)**
 
 ---
 
@@ -203,13 +203,43 @@ erDiagram
 
 ## Integraciones con IA
 
-El proyecto integra **3 servicios de IA** con OpenAI:
+El proyecto integra **4 servicios de IA** con OpenAI:
 
-### 1. Categorizacion automatica
+### 1. Agente de enriquecimiento autonomo (ReAct)
+
+```mermaid
+graph TD
+    A["Proveedor con datos basicos"] --> B{Agente ReAct}
+    B --> C["THOUGHT: Que informacion falta?"]
+    C --> D["ACTION: search_web / fetch_website / extract_contact"]
+    D --> E["OBSERVATION: Resultado de la herramienta"]
+    E --> F{Informacion completa?}
+    F -->|No| C
+    F -->|Si| G["ACTION: categorize + extract_entities + generate_embedding"]
+    G --> H["ACTION: update_provider"]
+    H --> I["FINISH: Resumen de cambios"]
+```
+
+Un agente con patron **ReAct** (Reason + Act) que enriquece proveedores de forma autonoma:
+- Analiza que informacion falta del proveedor
+- Decide que herramientas usar en cada paso (busqueda web, scraping, extraccion de contacto, categorizacion, embeddings)
+- Itera con un loop de razonamiento hasta completar el perfil o agotar el limite de iteraciones
+- Reporta cada decision con trazabilidad paso a paso (thought → action → observation)
+
+**Herramientas del agente:**
+- `search_web` — Busca informacion del proveedor en internet
+- `fetch_website` — Parsea contenido de un sitio web
+- `extract_contact` — Extrae emails y telefonos de contenido web
+- `categorize` — Categoriza al proveedor usando IA
+- `extract_entities` — Extrae servicios, tecnologias y especialidades
+- `generate_embedding` — Genera embedding vectorial
+- `update_provider` — Aplica los datos descubiertos al registro
+
+### 2. Categorizacion automatica
 
 Al crear un proveedor, gpt-5-mini analiza la descripcion y sugiere categorias del catalogo + tags relevantes.
 
-### 2. Busqueda semantica con embeddings
+### 3. Busqueda semantica con embeddings
 
 ```mermaid
 graph LR
@@ -224,7 +254,7 @@ graph LR
 - La busqueda convierte el query a embedding y busca por similitud coseno
 - El resultado: buscar "alguien que haga apps" encuentra proveedores de "desarrollo movil iOS/Android"
 
-### 3. Importacion inteligente desde la web
+### 4. Importacion inteligente desde la web
 
 ```mermaid
 graph TD
@@ -265,10 +295,10 @@ bc-directorio/
 │
 ├── backend/                       # FastAPI (Python)
 │   ├── app/
-│   │   ├── api/                   # Endpoints: providers, categories, search, ai
+│   │   ├── api/                   # Endpoints: providers, categories, search, ai, agents
 │   │   ├── models/                # SQLAlchemy models
 │   │   ├── schemas/               # Pydantic schemas (request/response)
-│   │   ├── services/              # Logica de negocio: IA, busqueda, importacion web
+│   │   ├── services/              # Logica de negocio: IA, agente ReAct, busqueda, importacion web
 │   │   ├── core/                  # Config, database, dependencias, auth
 │   │   └── main.py                # Entry point FastAPI
 │   ├── alembic/                   # Migraciones de base de datos
@@ -328,7 +358,7 @@ pnpm dev
 
 | Servicio | Plataforma | URL |
 |----------|-----------|-----|
-| Frontend | Vercel | [frontend-ten-tau-nq31sjk493.vercel.app](https://frontend-ten-tau-nq31sjk493.vercel.app) |
+| Frontend | Vercel | [nexo-dun.vercel.app](https://nexo-dun.vercel.app) |
 | Backend | Railway | [bc-directorio-backend-production.up.railway.app](https://bc-directorio-backend-production.up.railway.app/api/docs) |
 | Base de datos | Supabase | PostgreSQL + pgvector |
 
@@ -357,8 +387,9 @@ Este proyecto fue desarrollado utilizando **Claude Code** (Anthropic) y **Codex*
 - Generacion de documentacion
 
 La IA dentro de la aplicacion se usa para:
-1. **Categorizacion automatica** de proveedores (gpt-5-mini)
-2. **Busqueda semantica** con embeddings vectoriales (text-embedding-3-small + pgvector)
-3. **Extraccion de entidades** de descripciones de proveedores (gpt-5-mini)
-4. **Busqueda web** de proveedores externos (OpenAI Responses API con web_search)
-5. **Importacion inteligente** desde sitios web a proveedores del directorio (gpt-5-mini)
+1. **Agente autonomo de enriquecimiento** con patron ReAct — razona, decide que herramientas usar, y enriquece proveedores iterativamente (gpt-5-mini + tool-use)
+2. **Categorizacion automatica** de proveedores (gpt-5-mini)
+3. **Busqueda semantica** con embeddings vectoriales (text-embedding-3-small + pgvector)
+4. **Extraccion de entidades** de descripciones de proveedores (gpt-5-mini)
+5. **Busqueda web** de proveedores externos (OpenAI Responses API con web_search)
+6. **Importacion inteligente** desde sitios web a proveedores del directorio (gpt-5-mini)

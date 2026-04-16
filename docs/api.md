@@ -12,6 +12,7 @@
 - [Categories (Categorias)](#categories-categorias)
 - [Search (Busqueda Inteligente)](#search-busqueda-inteligente)
 - [AI (Inteligencia Artificial)](#ai-inteligencia-artificial)
+- [Agents (Agentes de IA)](#agents-agentes-de-ia)
 
 ---
 
@@ -395,3 +396,118 @@ Ejecutar solo la categorizacion IA. **Requiere autenticacion.**
 ### `POST /api/ai/extract/{provider_id}`
 
 Ejecutar solo la extraccion de entidades IA. **Requiere autenticacion.**
+
+---
+
+## Agents (Agentes de IA)
+
+### `POST /api/agents/enrich/{provider_id}`
+
+Ejecutar el agente autonomo de enriquecimiento sobre un proveedor. A diferencia del endpoint `/ai/enrich`, este agente usa un **loop de razonamiento ReAct** para decidir autonomamente que herramientas usar (busqueda web, scraping, extraccion de contacto, categorizacion, embeddings) y en que orden. **Requiere autenticacion.**
+
+El agente ejecuta hasta 8 iteraciones, razonando en cada paso sobre que informacion falta y que accion tomar. Retorna una traza completa de su razonamiento y acciones.
+
+**Herramientas del agente:**
+
+| Herramienta | Descripcion |
+|-------------|-------------|
+| `search_web` | Busca informacion del proveedor en internet |
+| `fetch_website` | Obtiene y parsea contenido de un sitio web |
+| `extract_contact` | Extrae emails y telefonos de contenido web |
+| `categorize` | Categoriza al proveedor usando IA |
+| `extract_entities` | Extrae servicios, tecnologias y especialidades |
+| `generate_embedding` | Genera embedding vectorial para busqueda semantica |
+| `update_provider` | Aplica los datos descubiertos al proveedor |
+
+**Response (200):**
+```json
+{
+  "provider_id": "uuid",
+  "status": "completed",
+  "steps": [
+    {
+      "type": "thought",
+      "content": "El proveedor no tiene website ni contacto. Voy a buscar en la web.",
+      "duration_ms": 1200
+    },
+    {
+      "type": "action",
+      "content": "Ejecutando search_web",
+      "tool": "search_web",
+      "tool_input": { "query": "TechCorp servicios tecnologia" },
+      "tool_output": { "found": true, "content": "TechCorp es una empresa..." },
+      "duration_ms": 3400
+    },
+    {
+      "type": "thought",
+      "content": "Encontre su sitio web. Ahora voy a extraer datos de contacto.",
+      "duration_ms": 800
+    },
+    {
+      "type": "action",
+      "content": "Ejecutando fetch_website",
+      "tool": "fetch_website",
+      "tool_input": { "url": "https://techcorp.co" },
+      "tool_output": { "success": true, "title": "TechCorp", "meta_description": "..." },
+      "duration_ms": 1500
+    },
+    {
+      "type": "action",
+      "content": "Ejecutando categorize",
+      "tool": "categorize",
+      "tool_input": { "description": "..." },
+      "tool_output": { "categories": [...], "tags": [...] },
+      "duration_ms": 2100
+    },
+    {
+      "type": "action",
+      "content": "Ejecutando update_provider",
+      "tool": "update_provider",
+      "tool_input": { "updates": { "website": "https://techcorp.co", "contact_email": "info@techcorp.co" } },
+      "tool_output": { "applied": { "website": "https://techcorp.co", "contact_email": "info@techcorp.co" } },
+      "duration_ms": 150
+    },
+    {
+      "type": "final",
+      "content": "Enriquecimiento completado. Se agrego website, email de contacto, 2 categorias y 4 tags."
+    }
+  ],
+  "changes_applied": {
+    "website": "https://techcorp.co",
+    "contact_email": "info@techcorp.co",
+    "categories_added": ["Desarrollo Web", "Cloud & DevOps"],
+    "tags_added": ["python", "aws", "docker", "fastapi"]
+  },
+  "summary": "Enriquecimiento completado. Se agrego website, email de contacto, 2 categorias y 4 tags.",
+  "total_iterations": 6,
+  "total_duration_ms": 12350
+}
+```
+
+**Campos de la respuesta:**
+
+| Campo | Tipo | Descripcion |
+|-------|------|-------------|
+| `provider_id` | UUID | ID del proveedor enriquecido |
+| `status` | string | `completed`, `partial` (limite de iteraciones), o `error` |
+| `steps` | AgentStep[] | Traza completa del razonamiento y acciones |
+| `changes_applied` | object | Datos que fueron efectivamente aplicados al proveedor |
+| `summary` | string | Resumen en lenguaje natural de lo realizado |
+| `total_iterations` | int | Numero de iteraciones del agente |
+| `total_duration_ms` | int | Duracion total en milisegundos |
+
+**Campos de cada step:**
+
+| Campo | Tipo | Descripcion |
+|-------|------|-------------|
+| `type` | string | `thought`, `action`, `final`, o `error` |
+| `content` | string | Descripcion del paso |
+| `tool` | string? | Nombre de la herramienta (solo en `action`) |
+| `tool_input` | object? | Parametros enviados a la herramienta |
+| `tool_output` | object? | Resultado retornado por la herramienta |
+| `duration_ms` | int? | Duracion del paso en milisegundos |
+
+**Errores:**
+- `401` — Autenticacion requerida
+- `404` — Proveedor no encontrado
+- `500` — Error ejecutando el agente
